@@ -591,6 +591,119 @@ int driver_test2( MPI_Comm comm, idx_t nx, idx_t ny )
 
 
 //
+// Driver for partitioning an adjacency structure that is read from files
+//
+int driver_test3( MPI_Comm comm, char string[] )
+{
+   int irank,nrank;
+   idx_t i,j;
+   idx_t *idst,*iadj,*jadj, *ipv;
+   idx_t *vwgt=NULL,*ewgt=NULL;
+   FILE *fp;
+   char *fname;
+   int ilen,n;
+   long nlv,nv;
+
+
+   MPI_Comm_rank( comm, &irank );
+   MPI_Comm_size( comm, &nrank );
+
+   ilen = 0;
+   while( string[ilen] != '\0' ) ++ilen;
+   ilen += 20;
+   fname = (char *) malloc( (size_t) ilen );
+   if( fname == NULL ) {
+      fprintf( stdout, "Could not allocate filename string \n");
+      return -1;
+   }
+
+   sprintf( fname, "%s_%.6d.dat", string, irank );
+   if( irank == 0 )
+      fprintf( stdout, "Filename: \"%s\"\n", fname );
+   fp = fopen( fname, "r" );
+
+   fgets( fname, ilen, fp );
+   sscanf( fname, "%ld", &nlv );
+   if( irank == 0 )
+      fprintf( stdout, "Number of vertices for rank 0: %ld \n", nlv );
+   MPI_Allreduce( &nlv, &nv, 1, MPI_LONG, MPI_SUM, comm );
+   if( irank == 0 )
+      fprintf( stdout, "Total number of vertices: %ld \n", nv );
+
+   idst = (idx_t *) malloc( ((size_t) nrank+1) * sizeof(idx_t) );
+   iadj = (idx_t *) malloc( ((size_t) nlv+1) * sizeof(idx_t) );
+   vwgt = (idx_t *) malloc( ((size_t) nlv  ) * sizeof(idx_t) );
+
+   for(n=0;n<nrank+1;++n) idst[n] = 0;
+   idst[irank+1] = (idx_t) nlv;
+   MPI_Allreduce( MPI_IN_PLACE, idst, nrank+1, MPI_INT, MPI_SUM, comm );
+   for(n=0;n<nrank;++n) idst[n+1] += idst[n];
+#ifdef _DEBUG_
+   if( irank == 0 )
+      fprintf( stdout, "Vertices breakdown: \n");
+   for(n=0;n<nrank;++n) {
+      if( irank == n )
+         fprintf( stdout, " partition %d  size (vertices) %ld \n",n, (long)nlv);
+      MPI_Barrier( comm );
+   }
+#endif
+
+   for( i=0; i < idst[irank+1] - idst[irank] + 1 ; ++i ) {
+      long int itmp;
+
+      fgets( fname, ilen, fp );
+      sscanf( fname, "%ld", &itmp );
+      iadj[i] = (idx_t) itmp;
+   }
+
+   jadj = (idx_t *) malloc( ((size_t) (iadj[nlv])) * sizeof(idx_t) );
+   ewgt = (idx_t *) malloc( ((size_t) (iadj[nlv])) * sizeof(idx_t) );
+
+   for( j=0; j < iadj[ nlv ] ; ++j ) {
+      long int itmp;
+
+      fgets( fname, ilen, fp );
+      sscanf( fname, "%ld", &itmp );
+      jadj[j] = (idx_t) itmp;
+   }
+
+   for( i=0; i < idst[irank+1] - idst[irank] ; ++i ) {
+      long int itmp;
+
+      fgets( fname, ilen, fp );
+      sscanf( fname, "%ld", &itmp );
+      vwgt[i] = (idx_t) itmp;
+   }
+
+   for( j=0; j < iadj[ nlv ] ; ++j ) {
+      long int itmp;
+
+      fgets( fname, ilen, fp );
+      sscanf( fname, "%ld", &itmp );
+      ewgt[j] = (idx_t) itmp;
+   }
+
+#ifdef _DEBUG_
+   (void) dump_adjacency( comm, idst, iadj, jadj );
+#endif
+
+   free( fname );
+
+   (void) check_adjacency( comm, idst, iadj, jadj );
+
+   (void) partition( comm, idst, iadj, jadj, vwgt, ewgt, (idx_t) nrank, &ipv );
+
+   free( ipv );
+   free( ewgt );
+   free( vwgt );
+   free( jadj );
+   free( iadj );
+   free( idst );
+
+   return 0;
+}
+
+//
 // Driver
 //
 int main( int argc, char *argv[] )
@@ -611,6 +724,8 @@ int main( int argc, char *argv[] )
    nx = 30;
    ny = 20;
    (void) driver_test2( comm, nx, ny );
+
+   (void) driver_test3( comm, "my_adj" );
 
    MPI_Finalize();
 
