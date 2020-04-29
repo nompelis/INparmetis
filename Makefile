@@ -31,5 +31,5 @@ all:
 	$(MPICC) $(DEBUG) $(COPTS) $(INCLUDE) main.c $(LIBS)
 
 clean:
-	rm -f *.o *.a a.out *.so *.a
+	rm -f *.o *.a a.out *.so *.a adj_*.dat
 

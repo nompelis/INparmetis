@@ -13,6 +13,12 @@ matrix).
 2. A generator of the distributed adjacency structure corresponding to a 1D
 Laplacian.
 
+3. A generator of the distributed adjacency structure corresponding to a 2D
+Laplacian.
+
+4. A driver that performs both the 1D and 2D Laplacian partitioning as a
+demo.
+
 
 TO BE CONTINUED...
 
