@@ -90,6 +90,62 @@ int check_adjacency( MPI_Comm comm,
 
 
 //
+// Function to write the adjacency structure to files by unrolling the arrays
+//
+int write_adjacency( MPI_Comm comm,
+                     idx_t* idst, idx_t* iadj, idx_t* jadj,
+                     idx_t* vwgt, idx_t* ewgt,
+                     char string[] )
+{
+   int irank,nrank;
+   idx_t i,j;
+   idx_t nv;
+   FILE *fp;
+   char fname[256];
+
+
+   MPI_Comm_rank( comm, &irank );
+   MPI_Comm_size( comm, &nrank );
+
+   nv = idst[nrank];
+   if( irank == 0 ) {
+      fprintf( stdout, "Number of vertices: %ld \n",(long) nv );
+      fprintf( stdout, "Writing adjacency to \"%s_*.dat\"\n", string );
+   }
+
+   sprintf( fname, "%s_%.6d.dat", string, irank );
+   fp = fopen( fname, "w" );
+   fprintf( fp, " %ld \n", (long) (idst[irank+1] - idst[irank]) );
+   for( i=0; i <= idst[irank+1] - idst[irank]; ++i ) {
+      fprintf( fp, "  %ld \n", (long) iadj[i] );
+   }
+   for( i=0; i < idst[irank+1] - idst[irank] ;++i ) {
+      for(j=iadj[i];j<iadj[i+1];++j) {
+         fprintf( fp, "   %ld \n", (long) jadj[j] );
+      }
+   }
+
+   if( vwgt != NULL ) {
+      for( i=0; i < idst[irank+1] - idst[irank]; ++i ) {
+         fprintf( fp, "   %ld \n", (long) vwgt[i] );
+      }
+   }
+
+   if( ewgt != NULL ) {
+      for( i=0; i < idst[irank+1] - idst[irank] ;++i ) {
+         for(j=iadj[i];j<iadj[i+1];++j) {
+            fprintf( fp, "    %ld \n", (long) ewgt[j] );
+         }
+      }
+   }
+
+   fclose( fp );
+
+   return 0;
+}
+
+
+//
 // Function to create an adjacency structure for a 1D Laplacian
 //
 int make_adjacency_Laplacian1D( MPI_Comm comm, idx_t nv,
@@ -480,7 +536,9 @@ int driver_test1( MPI_Comm comm, idx_t nv )
 
    (void) check_adjacency( comm, idst, iadj, jadj );
 
+#ifdef _DEBUG2_
    (void) dump_adjacency( comm, idst, iadj, jadj );
+#endif
 
    (void) partition( comm, idst, iadj, jadj, vwgt, ewgt, (idx_t) nrank, &ipv );
 
@@ -513,7 +571,11 @@ int driver_test2( MPI_Comm comm, idx_t nx, idx_t ny )
 
    (void) check_adjacency( comm, idst, iadj, jadj );
 
+#ifdef _DEBUG2_
    (void) dump_adjacency( comm, idst, iadj, jadj );
+#endif
+
+   (void) write_adjacency( comm, idst, iadj, jadj, vwgt, ewgt, "my_adj" );
 
    (void) partition( comm, idst, iadj, jadj, vwgt, ewgt, (idx_t) nrank, &ipv );
 
