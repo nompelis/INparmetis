@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <mpi.h>
 #include <parmetis.h>
 
 
@@ -226,6 +227,74 @@ int make_adjacency_Laplacian1D( MPI_Comm comm, idx_t nv,
    return 0;
 }
 
+//
+// Function to partition with ParMETIS
+//
+int partition( MPI_Comm comm,
+               idx_t* idst, idx_t* iadj, idx_t* jadj,
+               idx_t* vwgt, idx_t* ewgt,
+               idx_t npart,
+               idx_t** ipv )
+{
+   int irank,nrank,n,ierr=0;
+   size_t isize;
+   idx_t ncon = 1;
+   idx_t inum = 0;
+   idx_t iflag = 0;
+   real_t *r1, ubvec[1] = { 1.05 };
+   idx_t nedge, *_ipv;
+   idx_t iopt[4];
+   double t1;
+
+
+   MPI_Comm_rank( comm, &irank );
+   MPI_Comm_size( comm, &nrank );
+
+   isize = (size_t) (idst[irank+1] - idst[irank]);
+   _ipv = (idx_t *) malloc( isize * sizeof(idx_t) );
+   isize = (size_t) nrank;
+   r1 = (real_t *) malloc( isize * sizeof(idx_t) );
+   if( _ipv == NULL || r1 == NULL ) ierr = 1;
+   MPI_Allreduce( MPI_IN_PLACE, &ierr, 1, MPI_INT, MPI_SUM, comm );
+   if( ierr != 0 ) {
+      if( irank == 0 )
+         fprintf( stdout, "Could not allocate partition vector\n");
+      if( _ipv != NULL ) free( _ipv );
+      if( r1 != NULL ) free( r1 );
+      return -1;
+   }
+
+   for(n=0;n<npart;++n) r1[n] = 1.0/((real_t) npart);
+
+   if( vwgt != NULL ) iflag += 1;
+   if( ewgt != NULL ) iflag += 2;
+   if( irank == 0 ) fprintf( stdout, "Weights flag: %d \n",(int) iflag);
+
+   iopt[0] = 1;    // non-default options (0 = default)
+   iopt[1] = 0;    // info returned
+   iopt[1] = PARMETIS_DBGLVL_TIME | PARMETIS_DBGLVL_INFO |
+             PARMETIS_DBGLVL_PROGRESS | PARMETIS_DBGLVL_REFINEINFO |
+             PARMETIS_DBGLVL_MATCHINFO | PARMETIS_DBGLVL_RMOVEINFO |
+             PARMETIS_DBGLVL_REMAP;
+   iopt[1] = PARMETIS_DBGLVL_TIME | PARMETIS_DBGLVL_INFO ;
+   iopt[2] = 0;    // random seed
+   iopt[3] = PARMETIS_PSR_UNCOUPLED;    // # part != # processors
+
+   t1 = MPI_Wtime();
+   nedge = 0;
+   ierr = ParMETIS_V3_PartKway(
+             idst, iadj, jadj, vwgt, ewgt,
+             &iflag, &inum, &ncon, &npart, r1, ubvec, iopt, &nedge,
+             _ipv, &comm );
+
+
+   *ipv = _ipv;
+
+   free( r1 );
+
+   return 0;
+}
+
 
 //
 // Driver
@@ -235,7 +304,8 @@ int main( int argc, char *argv[] )
    MPI_Comm comm;
    int irank,nrank;
    idx_t nv,np;
-   idx_t *idst,*iadj,*jadj;
+   idx_t *idst,*iadj,*jadj, *ipv;
+   idx_t *vwgt=NULL,*ewgt=NULL;
 
 
    MPI_Init( &argc, &argv );
@@ -244,12 +314,15 @@ int main( int argc, char *argv[] )
    MPI_Comm_size( comm, &nrank );
 
 
-   nv = 35;
-   (void) make_adjacency_Laplacian1D( comm, nv, &idst, &iadj, &jadj, NULL,NULL);
+   nv = 350;
+   (void) make_adjacency_Laplacian1D( comm, nv, &idst, &iadj, &jadj,
+                                      &vwgt, &ewgt );
 
    (void) check_adjacency( comm, idst, iadj, jadj );
 
    (void) dump_adjacency( comm, idst, iadj, jadj );
+
+   (void) partition( comm, idst, iadj, jadj, vwgt, ewgt, (idx_t) nrank, &ipv );
 
 
    MPI_Finalize();
