@@ -286,11 +286,45 @@ int partition( MPI_Comm comm,
              idst, iadj, jadj, vwgt, ewgt,
              &iflag, &inum, &ncon, &npart, r1, ubvec, iopt, &nedge,
              _ipv, &comm );
-
+   t1 = MPI_Wtime() - t1;
+   if( irank == 0 ) fprintf( stdout, "Partitioned in %lf sec \n",t1);
 
    *ipv = _ipv;
 
    free( r1 );
+
+   return 0;
+}
+
+
+//
+// Driver for the 1D Laplacian partitioing
+//
+int driver_test1( MPI_Comm comm, idx_t nv )
+{
+   int irank,nrank;
+   idx_t *idst,*iadj,*jadj, *ipv;
+   idx_t *vwgt=NULL,*ewgt=NULL;
+
+
+   MPI_Comm_rank( comm, &irank );
+   MPI_Comm_size( comm, &nrank );
+
+   (void) make_adjacency_Laplacian1D( comm, nv, &idst, &iadj, &jadj,
+                                      &vwgt, &ewgt );
+
+   (void) check_adjacency( comm, idst, iadj, jadj );
+
+   (void) dump_adjacency( comm, idst, iadj, jadj );
+
+   (void) partition( comm, idst, iadj, jadj, vwgt, ewgt, (idx_t) nrank, &ipv );
+
+   free( ipv );
+   free( ewgt );
+   free( vwgt );
+   free( jadj );
+   free( iadj );
+   free( idst );
 
    return 0;
 }
@@ -303,9 +337,7 @@ int main( int argc, char *argv[] )
 {
    MPI_Comm comm;
    int irank,nrank;
-   idx_t nv,np;
-   idx_t *idst,*iadj,*jadj, *ipv;
-   idx_t *vwgt=NULL,*ewgt=NULL;
+   idx_t nv;
 
 
    MPI_Init( &argc, &argv );
@@ -313,17 +345,8 @@ int main( int argc, char *argv[] )
    MPI_Comm_rank( comm, &irank );
    MPI_Comm_size( comm, &nrank );
 
-
    nv = 350;
-   (void) make_adjacency_Laplacian1D( comm, nv, &idst, &iadj, &jadj,
-                                      &vwgt, &ewgt );
-
-   (void) check_adjacency( comm, idst, iadj, jadj );
-
-   (void) dump_adjacency( comm, idst, iadj, jadj );
-
-   (void) partition( comm, idst, iadj, jadj, vwgt, ewgt, (idx_t) nrank, &ipv );
-
+   (void) driver_test1( comm, nv );
 
    MPI_Finalize();
 
