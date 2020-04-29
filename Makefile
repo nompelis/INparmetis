@@ -1,5 +1,6 @@
 ###### Pre-processor directives to increase verbosity
 DEBUG = -D   _DEBUG_
+DEBUG += -D NO_DEBUG2_
 
 ###### additional compile-time configuration
 SPECIAL_OPTIONS = -D  _LINUX_
